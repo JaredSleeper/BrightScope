@@ -8,13 +8,14 @@ dependencies = [
     "asyncpg>=0.29",
     "databricks-sql-connector>=4.0",
     "fastapi>=0.115",
+    "httpx>=0.27",
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.32",
 ]
 
 [dependency-groups]
-dev = ["httpx>=0.27", "pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.7"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.7"]
 
 [project.scripts]
 brightscope = "brightscope.cli:main"
