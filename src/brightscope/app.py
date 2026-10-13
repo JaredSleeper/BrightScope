@@ -10,12 +10,14 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.datastructures import QueryParams
 
-from . import ai, db, deals, news, sqlconsole, sync
+from . import ai, db, deals, news, sqlconsole, sync, thesis
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -51,6 +53,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="BrightScope", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 protected = [Depends(require_auth)]
 
@@ -151,54 +154,137 @@ async def health():
     return {"ok": True}
 
 
+def _json(v):
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, date | datetime):
+        return v.isoformat()
+    return v
+
+
+def _records(rows) -> list[dict]:
+    return [{k: _json(v) for k, v in r.items()} for r in rows]
+
+
 @app.get("/", response_class=HTMLResponse, dependencies=protected)
 async def deals_page(request: Request):
+    return await render(request, "deals.html", ai_enabled=ai.configured())
+
+
+@app.get("/api/deals", dependencies=protected)
+async def api_deals(request: Request):
+    started = datetime.now(UTC)
     f = deals.DealFilters.from_query(request.query_params)
+    elite = await db.elite_funds()
     pg = db.pool()
-    sql, args = deals.deals_sql(f)
-    rows = await pg.fetch(sql, *args)
-    s_sql, s_args = deals.summary_sql(f)
-    summary = await pg.fetchrow(s_sql, *s_args)
-    fc_sql, fc_args = deals.fund_counts_sql(f)
-    fund_counts = await pg.fetch(fc_sql, *fc_args)
-    m_sql, m_args = deals.monthly_sql(f)
-    monthly = await pg.fetch(m_sql, *m_args)
-
-    async def col(q: str) -> list[str]:
-        return [r[0] for r in await pg.fetch(q)]
-
-    options = {
-        "funds": await col("select name from elite_funds order by name"),
-        "categories": await col(
-            "select x from rounds, unnest(categories) x group by 1 order by count(*) desc limit 250"
-        ),
-        "countries": await col(
-            "select country from rounds where country is not null group by 1 order by count(*) desc"
-        ),
-        "affinity": await col(
-            "select affinity_status from companies where affinity_status is not null "
-            "group by 1 order by 1"
-        ),
-    }
-    pages = max(1, -(-(summary["n"] or 0) // f.per_page))
-    return await render(
-        request,
-        "deals.html",
-        f=f,
-        rows=rows,
-        summary=summary,
-        fund_counts=fund_counts,
-        monthly=monthly,
-        monthly_max=max([r["n"] for r in monthly] or [1]),
-        options=options,
-        pages=pages,
+    queries = [
+        deals.rows_sql(f, elite),
+        deals.summary_sql(f, elite),
+        deals.fund_counts_sql(f, elite),
+        deals.monthly_sql(f, elite),
+    ]
+    rows, summary, funds, monthly = await asyncio.gather(
+        *(pg.fetch(sql, *args) for sql, args in queries)
     )
+    s = {k: _json(v) for k, v in summary[0].items()}
+    return JSONResponse(
+        {
+            "rows": _records(rows),
+            "summary": s,
+            "funds": _records(funds),
+            "monthly": _records(monthly),
+            "page": f.page,
+            "per_page": f.per_page,
+            "sort": f.sort,
+            "dir": f.direction,
+            "ms": round((datetime.now(UTC) - started).total_seconds() * 1000),
+        }
+    )
+
+
+@app.get("/api/options", dependencies=protected)
+async def api_options():
+    opts = await thesis.options()
+    pg = db.pool()
+    affinity = await pg.fetch(
+        "select affinity_status from companies where affinity_status is not null "
+        "group by 1 order by 1"
+    )
+    return {
+        "elite": await db.elite_funds(),
+        "categories": opts["categories"][:600],
+        "countries": opts["countries"],
+        "affinity": [r[0] for r in affinity],
+    }
+
+
+@app.get("/api/investors", dependencies=protected)
+async def api_investors(q: str = ""):
+    rows = await db.pool().fetch(
+        "select investor, count(*) n from round_investors where investor ilike $1 "
+        "group by 1 order by 2 desc limit 25",
+        f"%{q.strip()}%",
+    )
+    return [r["investor"] for r in rows]
+
+
+@app.post("/api/thesis", dependencies=protected)
+async def api_thesis(request: Request):
+    body = await request.json()
+    text = str(body.get("text") or "").strip()[:1000]
+    if not text:
+        raise HTTPException(400, "Describe a thesis first")
+    if not ai.configured():
+        return {"params": [["q", text]], "summary": "", "ms": 0}
+    try:
+        return await thesis.parse(text)
+    except Exception as exc:
+        log.exception("thesis parse failed")
+        return {"params": [["q", text]], "summary": "", "error": str(exc)[:200], "ms": 0}
+
+
+@app.get("/api/theses", dependencies=protected)
+async def api_theses():
+    pg = db.pool()
+    elite = await db.elite_funds()
+    rows = await pg.fetch("select * from theses order by last_viewed_at desc")
+    out = []
+    for r in rows:
+        f = deals.DealFilters.from_query(QueryParams(r["params"]))
+        sql, args = deals.new_since_sql(f, elite, r["last_viewed_at"])
+        out.append({**{k: _json(v) for k, v in r.items()}, "new": await pg.fetchval(sql, *args)})
+    return out
+
+
+@app.post("/api/theses", dependencies=protected)
+async def api_theses_save(request: Request):
+    body = await request.json()
+    name = str(body.get("name") or "").strip()[:120] or "Untitled thesis"
+    row = await db.pool().fetchrow(
+        "insert into theses (name, thesis, params) values ($1, $2, $3) returning id",
+        name,
+        str(body.get("thesis") or "")[:1000],
+        str(body.get("params") or "")[:4000],
+    )
+    return {"id": row["id"]}
+
+
+@app.post("/api/theses/{tid}/viewed", dependencies=protected)
+async def api_theses_viewed(tid: int):
+    await db.pool().execute("update theses set last_viewed_at = now() where id = $1", tid)
+    return {"ok": True}
+
+
+@app.delete("/api/theses/{tid}", dependencies=protected)
+async def api_theses_delete(tid: int):
+    await db.pool().execute("delete from theses where id = $1", tid)
+    return {"ok": True}
 
 
 @app.get("/export.csv", dependencies=protected)
 async def export_csv(request: Request):
     f = deals.DealFilters.from_query(request.query_params)
-    sql, args = deals.deals_sql(f, paginate=False)
+    sql, args = deals.export_sql(f, await db.elite_funds())
     rows = await db.pool().fetch(sql, *args)
     return _csv_response([*rows[0].keys()] if rows else [], [list(r.values()) for r in rows])
 
@@ -217,10 +303,17 @@ def _csv_response(columns: list[str], rows: list[list]) -> StreamingResponse:
     )
 
 
+ELITE_COL = (
+    "array(select x from unnest(d.all_investors) x where x = any($1::text[])) as elite_investors"
+)
+
+
 async def _org(permalink: str):
     pg = db.pool()
     rounds = await pg.fetch(
-        deals.BASE + "select * from d where org_permalink = $1 order by announced_on desc",
+        f"select d.*, {ELITE_COL} from deal_view d where org_permalink = $2 "
+        "order by announced_on desc",
+        await db.elite_funds(),
         permalink,
     )
     if not rounds:
@@ -255,8 +348,10 @@ async def company_page(request: Request, permalink: str):
     peers = []
     if first["categories"]:
         peers = await pg.fetch(
-            deals.BASE + "select * from d where categories && $1::text[] and org_permalink <> $2 "
-            "and elite_count > 0 order by announced_on desc nulls last limit 15",
+            f"select d.*, {ELITE_COL} from deal_view d where categories && $2::text[] "
+            "and org_permalink <> $3 and all_investors && $1::text[] "
+            "order by announced_on desc nulls last limit 15",
+            await db.elite_funds(),
             first["categories"][:2],
             permalink,
         )

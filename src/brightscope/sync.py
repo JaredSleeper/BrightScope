@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from . import databricks
+from . import databricks, views
 from .config import settings
 from .db import (
     COMPANY_COLUMN_NAMES,
@@ -171,6 +171,7 @@ async def _do_sync(conn) -> dict:
             "select count(*) from ins",
             bootstrap,
         )
+        await views.rebuild(conn)
     return {
         "rounds": len(rounds),
         "investor_links": len(investors),

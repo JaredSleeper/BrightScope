@@ -1,5 +1,6 @@
 import asyncpg
 
+from . import views
 from .config import settings
 from .elite import DEFAULT_ELITE_FUNDS
 
@@ -138,6 +139,14 @@ create table if not exists saved_queries (
     sql text not null,
     created_at timestamptz not null default now()
 );
+create table if not exists theses (
+    id serial primary key,
+    name text not null,
+    thesis text not null default '',
+    params text not null default '',
+    created_at timestamptz not null default now(),
+    last_viewed_at timestamptz not null default now()
+);
 create table if not exists company_news (
     website text primary key,
     fetched_at timestamptz not null default now(),
@@ -153,6 +162,7 @@ async def init_pool() -> asyncpg.Pool:
         p = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=8)
         async with p.acquire() as conn:
             await migrate(conn)
+            await views.ensure(conn)
         _state["pool"] = p
     return _state["pool"]
 
@@ -167,6 +177,10 @@ def pool() -> asyncpg.Pool:
     if "pool" not in _state:
         raise RuntimeError("database pool not initialised")
     return _state["pool"]
+
+
+async def elite_funds() -> list[str]:
+    return [r[0] for r in await pool().fetch("select name from elite_funds order by name")]
 
 
 async def migrate(conn: asyncpg.Connection) -> None:
