@@ -111,6 +111,7 @@ table.deals td.co { white-space:normal; min-width:280px; max-width:380px; }
 table.deals .name { font-weight:600; color:var(--ink); }
 table.deals .site { color:var(--faint); font-size:11.5px; margin-left:4px; }
 table.deals .blurb { color:var(--muted); font-size:12px; margin-top:2px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+table.deals td.aff { white-space:normal; min-width:110px; max-width:150px; }
 mark { background:var(--mark); color:inherit; border-radius:2px; padding:0 1px; }
 td.empty { text-align:center; color:var(--muted); padding:40px; }
 .more { text-align:center; margin:12px 0; }
