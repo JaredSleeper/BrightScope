@@ -126,8 +126,13 @@
       renderHead(d.sort, d.dir);
       if (reset) $("#grid tbody").innerHTML = rows.length ? rows.map(rowHtml).join("") : `<tr><td colspan="${COLS.length}" class="empty">No rounds match. Try removing a filter.</td></tr>`;
       else $("#grid tbody").insertAdjacentHTML("beforeend", d.rows.map(rowHtml).join(""));
-      if (reset) { renderStats(d.summary); renderChart(d.monthly); renderFunds(d.funds); $("#tablewrap").scrollTop = 0; }
-      $("#count").textContent = `${total.toLocaleString()} rounds · showing ${rows.length.toLocaleString()} · ${d.ms} ms`;
+      if (reset) $("#tablewrap").scrollTop = 0;
+      const s = d.summary;
+      const bits = [`<b>${total.toLocaleString()}</b> rounds`];
+      if (s.raised) bits.push(`${money(s.raised)} raised`);
+      if (s.median_round) bits.push(`median round ${money(s.median_round)}`);
+      if (s.elite_led) bits.push(`${s.elite_led.toLocaleString()} led by an elite fund`);
+      $("#count").innerHTML = bits.join(" · ") + (rows.length < total ? ` <span class="faint">· showing ${rows.length.toLocaleString()}</span>` : "");
       $("#more").hidden = rows.length >= total;
     } catch (err) {
       if (err.name !== "AbortError") $("#count").textContent = "Something went wrong loading results.";
@@ -137,53 +142,21 @@
   }
   $("#more").addEventListener("click", () => { page += 1; load(false); });
 
-  function renderStats(s) {
-    const items = [
-      [(s.n || 0).toLocaleString(), "Series A rounds"],
-      [money(s.raised), "raised in these rounds"],
-      [money(s.median_round), "median round"],
-      [money(s.median_post), "median post-money"],
-      [(s.elite_led || 0).toLocaleString(), "led by an elite fund"],
-      [(s.raised_since || 0).toLocaleString(), "have raised a B or later"],
-      [(s.not_in_affinity || 0).toLocaleString(), "not in Affinity"],
-    ];
-    $("#stats").innerHTML = items.map(([v, l]) => `<div><b>${v || "–"}</b><span>${l}</span></div>`).join("");
-  }
-  function renderChart(monthly) {
-    if (!monthly.length) { $("#chart").innerHTML = ""; return; }
-    const max = Math.max(...monthly.map((m) => m.n), 1);
-    $("#chart").innerHTML = monthly.map((m) => {
-      const [y, mo] = m.month.split("-");
-      return `<div class="bar" title="${MONTHS[+mo - 1]} ${y}: ${m.n} rounds, ${m.elite_led} elite-led"><i style="height:${(m.n / max) * 100}%"><em style="height:${m.n ? (m.elite_led / m.n) * 100 : 0}%"></em></i></div>`;
-    }).join("") + `<div class="chart-legend"><span><i class="k1"></i>rounds per month</span><span><i class="k2"></i>elite-led</span></div>`;
-  }
-  function renderFunds(funds) {
-    const sel = new Set(state.fund || []);
-    $("#fundbar").innerHTML = funds.slice(0, 40).map((f) => `<button type="button" class="fund${sel.has(f.investor) ? " on" : ""}" data-fund="${esc(f.investor)}">${esc(f.investor)} <span>${f.n}</span></button>`).join("");
-  }
-  $("#fundbar").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-fund]");
-    if (!b) return;
-    const cur = new Set(state.fund || []);
-    cur.has(b.dataset.fund) ? cur.delete(b.dataset.fund) : cur.add(b.dataset.fund);
-    set("fund", [...cur]);
-  });
-
   // ---------- filters ----------
   const FIELDS = [
     { k: "scope", label: "Investors", type: "select", options: [["elite", "An elite fund invested"], ["elite_lead", "An elite fund led"], ["all", "Any investor"]] },
     { k: "kw", label: "Thesis keywords", type: "tokens", placeholder: "Add a keyword" },
     { k: "fund", label: "Specific investors", type: "multi", source: () => opts.elite, remote: "/api/investors?q=" },
-    { k: "category", label: "Categories", type: "multi", source: () => opts.categories },
-    { k: "country", label: "Country", type: "multi", source: () => opts.countries },
+    { k: "category", label: "Categories", type: "multi", source: () => opts.categories, more: true },
+    { k: "country", label: "Country", type: "multi", source: () => opts.countries, more: true },
     { k: ["since", "until"], label: "Announced", type: "range", input: "date" },
-    { k: ["min_round_m", "max_round_m"], label: "Round size, $M", type: "range" },
+    { k: ["min_round_m", "max_round_m"], label: "Round size, $M", type: "range", more: true },
     { k: ["min_post_m", "max_post_m"], label: "Post-money, $M", type: "range", more: true },
     { k: ["min_headcount", "max_headcount"], label: "Headcount", type: "range", more: true },
-    { k: "min_hc_growth", label: "People YoY, at least %", type: "number" },
+    { k: "min_hc_growth", label: "People YoY, at least %", type: "number", more: true },
     { k: "min_fol_growth", label: "Followers YoY, at least %", type: "number", more: true },
     { k: "founded_since", label: "Founded in or after", type: "number", placeholder: "year", more: true },
-    { k: "progress", label: "Since the A", type: "select", options: [["", "Any"], ["still_a", "Still at Series A"], ["raised_since", "Raised a B or later"]] },
+    { k: "progress", label: "Since the A", type: "select", options: [["", "Any"], ["still_a", "Still at Series A"], ["raised_since", "Raised a B or later"]], more: true },
     { k: "affinity", label: "Affinity", type: "select", options: () => [["", "Any"], ["none", "Not in Affinity"], ["in", "In Affinity"], ...opts.affinity.map((a) => [a, a])], more: true },
     { k: "q", label: "Text search", type: "text", placeholder: "Name, website, investor", more: true },
     { k: "new_only", label: "New in data this week", type: "check", more: true },

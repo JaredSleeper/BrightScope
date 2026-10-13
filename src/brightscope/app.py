@@ -177,22 +177,13 @@ async def api_deals(request: Request):
     f = deals.DealFilters.from_query(request.query_params)
     elite = await db.elite_funds()
     pg = db.pool()
-    queries = [
-        deals.rows_sql(f, elite),
-        deals.summary_sql(f, elite),
-        deals.fund_counts_sql(f, elite),
-        deals.monthly_sql(f, elite),
-    ]
-    rows, summary, funds, monthly = await asyncio.gather(
-        *(pg.fetch(sql, *args) for sql, args in queries)
-    )
+    queries = [deals.rows_sql(f, elite), deals.summary_sql(f, elite)]
+    rows, summary = await asyncio.gather(*(pg.fetch(sql, *args) for sql, args in queries))
     s = {k: _json(v) for k, v in summary[0].items()}
     return JSONResponse(
         {
             "rows": _records(rows),
             "summary": s,
-            "funds": _records(funds),
-            "monthly": _records(monthly),
             "page": f.page,
             "per_page": f.per_page,
             "sort": f.sort,
