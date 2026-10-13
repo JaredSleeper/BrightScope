@@ -71,6 +71,7 @@
   // ---------- table ----------
   const COLS = [
     { key: "org_name", label: "Company", cls: "co", render: (r) => `<a class="name" href="/c/${encodeURIComponent(r.org_permalink)}">${esc(r.org_name)}</a>${r.website ? ` <a class="site" href="https://${esc(r.website)}" target="_blank" rel="noopener">${esc(r.website)}</a>` : ""}${r.blurb ? `<div class="blurb">${highlight(r.blurb)}</div>` : ""}` },
+    { key: null, label: "Affinity", cls: "aff", render: (r) => (r.affinity_link ? `<a href="${esc(r.affinity_link)}" target="_blank" rel="noopener">${esc(r.affinity_status || "Open")}</a>` : esc(r.affinity_status || "")) + (r.affinity_owner ? `<div class="muted">${esc(r.affinity_owner)}</div>` : "") },
     { key: "announced_on", label: "Announced", render: (r) => day(r.announced_on) },
     { key: "money_raised_usd", label: "Round", n: true, render: (r) => money(r.money_raised_usd) },
     { key: "post_money_usd", label: "Post-money", n: true, render: (r) => money(r.post_money_usd) },
@@ -84,7 +85,6 @@
     { key: "total_visits", label: "Visits/mo", n: true, render: (r) => num(r.total_visits) },
     { key: "delta_yoy", label: "Visits YoY", n: true, render: (r) => pct(r.delta_yoy) },
     { key: null, label: "HQ", render: (r) => `${esc(r.city || "")}${r.country ? `<div class="muted">${esc(r.country)}</div>` : ""}` },
-    { key: null, label: "Affinity", render: (r) => (r.affinity_link ? `<a href="${esc(r.affinity_link)}" target="_blank" rel="noopener">${esc(r.affinity_status || "Open")}</a>` : esc(r.affinity_status || "")) + (r.affinity_owner ? `<div class="muted">${esc(r.affinity_owner)}</div>` : "") },
   ];
 
   function renderHead(sort, dir) {
