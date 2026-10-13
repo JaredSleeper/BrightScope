@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import hashlib
 import io
 import logging
 import secrets
@@ -116,7 +117,15 @@ def ago(v) -> str:
     return f"{secs / 86400:.0f} days ago"
 
 
+def _asset_version() -> str:
+    h = hashlib.sha1()
+    for f in sorted((ROOT / "static").glob("*")):
+        h.update(f.read_bytes())
+    return h.hexdigest()[:10]
+
+
 templates.env.filters.update(money=money, pct=pct, num=num, cell=cell, ago=ago)
+templates.env.globals["asset_v"] = _asset_version()
 templates.env.globals["today"] = date.today
 
 

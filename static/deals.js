@@ -290,6 +290,7 @@
     $("#interp").innerHTML = `<span class="thinking">Reading your thesis…</span>`;
     try {
       const res = await fetch("/api/thesis", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       thesisText = text;
       state = { ...DEFAULTS };
@@ -299,6 +300,8 @@
       }
       $("#interp").innerHTML = d.summary ? `${esc(d.summary)} <span class="muted">Adjust any filter below.</span>` : d.error ? `<span class="neg">Couldn't read that thesis, so this is a plain text search.</span>` : "";
       changed(true);
+    } catch (err) {
+      $("#interp").innerHTML = `<span class="neg">Search didn't go through. Reload the page and try again.</span>`;
     } finally {
       go.disabled = false;
     }
