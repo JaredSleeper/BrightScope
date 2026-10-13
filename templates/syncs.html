@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Sync from Databricks</h1>
+<p>Runs every day at {{ '%02d' % settings.sync_hour_utc }}:00 UTC. Next run: {{ next_run.strftime('%Y-%m-%d %H:%M UTC') }}. Each run replaces the local copy with a fresh pull of {{ settings.sync_stages | join(', ') }} rounds announced since {{ settings.sync_since }}, their investors, and traction data for those companies.</p>
+<form method="post" action="/syncs/run"><button class="primary" type="submit" {{ 'disabled' if running }}>{{ 'Sync running…' if running else 'Sync now' }}</button></form>
+<h2>Recent runs</h2>
+<table class="grid"><thead><tr><th>Started</th><th>Finished</th><th>Trigger</th><th>Status</th><th class="n">Rounds</th><th class="n">Investor links</th><th class="n">Companies</th><th class="n">New rounds</th><th>Error</th></tr></thead><tbody>
+{% for r in runs %}<tr><td>{{ r.started_at | cell }}</td><td>{{ r.finished_at | cell }}</td><td>{{ r.trigger }}</td><td>{{ r.status }}</td><td class="n">{{ r.rounds or '' }}</td><td class="n">{{ r.investor_links or '' }}</td><td class="n">{{ r.companies or '' }}</td><td class="n">{{ r.new_rounds if r.new_rounds is not none }}</td><td class="wrap">{{ r.error or '' }}</td></tr>
+{% else %}<tr><td colspan="9" class="muted">No runs yet.</td></tr>{% endfor %}
+</tbody></table>
+<h2>Source queries</h2>
+{% for q in source_sql %}<pre class="schema">{{ q }}</pre>{% endfor %}
+{% endblock %}

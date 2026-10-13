@@ -1,0 +1,14 @@
+{% macro delta(v) -%}
+{%- if v is not none -%}<span class="{{ 'pos' if v > 0 else 'neg' if v < 0 }}">{{ v | pct }}</span>{%- endif -%}
+{%- endmacro %}
+{% macro th(label, key, f, cls='') -%}
+{%- set nd = 'asc' if f.sort == key and f.direction == 'desc' else 'desc' -%}
+<th class="{{ cls }}"><a href="?{{ query_without(request, 'sort', 'dir', 'page', sort=key, dir=nd) }}">{{ label }}{% if f.sort == key %} {{ '↓' if f.direction == 'desc' else '↑' }}{% endif %}</a></th>
+{%- endmacro %}
+{% macro result_table(res) -%}
+<div class="toolbar">{{ res.rows | length }} rows{% if res.truncated %} (first {{ res.rows | length }} shown){% endif %}</div>
+<div class="tablewrap"><table class="grid">
+<thead><tr>{% for c in res.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+<tbody>{% for r in res.rows %}<tr>{% for v in r %}<td>{{ v | cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table></div>
+{%- endmacro %}

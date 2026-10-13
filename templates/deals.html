@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% from "_macros.html" import delta, th with context %}
+{% block body %}
+<div class="layout">
+<aside class="filters">
+<form method="get" action="/">
+  <input type="hidden" name="sort" value="{{ f.sort }}"><input type="hidden" name="dir" value="{{ f.direction }}">
+  <label>Search</label>
+  <input type="text" name="q" value="{{ f.q }}" placeholder="Company, website, description, investor">
+  <label>Investors</label>
+  <select name="scope">
+    <option value="elite" {{ 'selected' if f.scope == 'elite' }}>An elite fund invested</option>
+    <option value="elite_lead" {{ 'selected' if f.scope == 'elite_lead' }}>An elite fund led</option>
+    <option value="all" {{ 'selected' if f.scope == 'all' }}>All Series A rounds</option>
+  </select>
+  <label>Specific funds <span class="hint">any of</span></label>
+  <select name="fund" multiple>{% for o in options.funds %}<option {{ 'selected' if o in f.funds }}>{{ o }}</option>{% endfor %}</select>
+  <label>Announced</label>
+  <div class="row2"><input type="date" name="since" value="{{ f.since or '' }}"><input type="date" name="until" value="{{ f.until or '' }}"></div>
+  <label>Round size <span class="hint">$M</span></label>
+  <div class="row2"><input type="number" step="any" name="min_round_m" placeholder="min" value="{{ f.min_round_m if f.min_round_m is not none else '' }}"><input type="number" step="any" name="max_round_m" placeholder="max" value="{{ f.max_round_m if f.max_round_m is not none else '' }}"></div>
+  <label>Since the A</label>
+  <select name="progress">
+    <option value="any">Any</option>
+    <option value="still_a" {{ 'selected' if f.progress == 'still_a' }}>Still at Series A</option>
+    <option value="raised_since" {{ 'selected' if f.progress == 'raised_since' }}>Has raised a B or later</option>
+  </select>
+  <label>Headcount</label>
+  <div class="row2"><input type="number" name="min_headcount" placeholder="min people" value="{{ f.min_headcount if f.min_headcount is not none else '' }}"><input type="number" step="any" name="min_hc_growth" placeholder="min YoY %" value="{{ f.min_hc_growth if f.min_hc_growth is not none else '' }}"></div>
+  <label>Monthly web visits <span class="hint">min</span></label>
+  <input type="number" name="min_visits" value="{{ f.min_visits if f.min_visits is not none else '' }}">
+  <label>Category</label>
+  <select name="category" multiple>{% for o in options.categories %}<option {{ 'selected' if o in f.categories }}>{{ o }}</option>{% endfor %}</select>
+  <label>Country</label>
+  <select name="country" multiple>{% for o in options.countries %}<option {{ 'selected' if o in f.countries }}>{{ o }}</option>{% endfor %}</select>
+  <label>Affinity</label>
+  <select name="affinity">
+    <option value="any">Any</option>
+    <option value="none" {{ 'selected' if f.affinity == 'none' }}>Not in Affinity</option>
+    <option value="in" {{ 'selected' if f.affinity == 'in' }}>In Affinity</option>
+    {% for o in options.affinity %}<option {{ 'selected' if f.affinity == o }}>{{ o }}</option>{% endfor %}
+  </select>
+  <label><input type="checkbox" name="new_only" value="1" {{ 'checked' if f.new_only }}> New in data this week</label>
+  <label>Rows per page</label>
+  <select name="per_page">{% for n in [50, 100, 250, 500, 1000] %}<option {{ 'selected' if f.per_page == n }}>{{ n }}</option>{% endfor %}</select>
+  <p><button class="primary" type="submit">Apply</button> <a class="btn" href="/">Reset</a></p>
+</form>
+</aside>
+<section>
+  <div class="stats">
+    <div><b>{{ '{:,}'.format(summary.n or 0) }}</b><span>Series A rounds</span></div>
+    <div><b>{{ summary.raised | money }}</b><span>raised in these rounds</span></div>
+    <div><b>{{ summary.median_round | money }}</b><span>median round</span></div>
+    <div><b>{{ summary.median_post | money }}</b><span>median post-money</span></div>
+    <div><b>{{ '{:,}'.format(summary.raised_since or 0) }}</b><span>have raised a B or later</span></div>
+    <div><b>{{ '{:,}'.format(summary.not_in_affinity or 0) }}</b><span>not in Affinity</span></div>
+  </div>
+  {% if monthly %}
+  <div class="spark" title="Rounds per month, last 36 months">
+    {% for m in monthly %}<div style="height: {{ (m.n / monthly_max * 100) | round(1) }}%" title="{{ m.month.strftime('%b %Y') }}: {{ m.n }}"></div>{% endfor %}
+  </div>
+  {% endif %}
+  <div class="fundbar">
+    {% for r in fund_counts %}<a class="{{ 'on' if r.investor in f.funds }}" href="?{{ query_without(request, 'fund', 'page', fund=r.investor) }}">{{ r.investor }} {{ r.n }}</a>{% endfor %}
+  </div>
+  <div class="toolbar">
+    <span>Page {{ f.page }} of {{ pages }}</span>
+    <span class="right"><a href="/export.csv?{{ query_without(request, 'page') }}">Download CSV</a> · <a href="/query">Write SQL</a></span>
+  </div>
+  <div class="tablewrap">
+  <table class="grid">
+  <thead><tr>
+    {{ th('Company', 'org_name', f) }}
+    {{ th('Announced', 'announced_on', f) }}
+    {{ th('Round', 'money_raised_usd', f, 'n') }}
+    {{ th('Post-money', 'post_money_usd', f, 'n') }}
+    <th>Lead</th>
+    {{ th('Elite investors', 'elite_count', f) }}
+    {{ th('All', 'num_investors', f, 'n') }}
+    <th>Stage now</th>
+    {{ th('Total raised', 'total_funding', f, 'n') }}
+    <th>Category</th>
+    <th>HQ</th>
+    {{ th('People', 'headcount', f, 'n') }}
+    {{ th('People YoY', 'delta_year_headcount', f, 'n') }}
+    {{ th('Followers YoY', 'delta_year_followers', f, 'n') }}
+    {{ th('Visits/mo', 'total_visits', f, 'n') }}
+    {{ th('Visits YoY', 'delta_yoy', f, 'n') }}
+    {{ th('Glassdoor', 'overall_rating', f, 'n') }}
+    <th>Affinity</th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="wrap"><div class="clip"><a href="/c/{{ r.org_permalink }}"><b>{{ r.org_name }}</b></a>{% if r.website %} <a class="sub" href="https://{{ r.website }}" target="_blank" rel="noopener">{{ r.website }}</a>{% endif %}
+      {% if r.org_description %}<div class="sub">{{ r.org_description[:140] }}{% if r.org_description|length > 140 %}…{% endif %}</div>{% endif %}</div></td>
+    <td>{{ r.announced_on or '' }}</td>
+    <td class="n">{{ r.money_raised_usd | money }}</td>
+    <td class="n">{{ r.post_money_usd | money }}</td>
+    <td class="wrap">{% for l in r.lead_investors %}{% if l in r.elite_investors %}<b>{{ l }}</b>{% else %}{{ l }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}</td>
+    <td class="wrap">{{ r.elite_investors | join(', ') }}</td>
+    <td class="n">{{ r.all_investors | length }}</td>
+    <td>{{ (r.current_stage or '') | replace('_', ' ') }}</td>
+    <td class="n">{{ r.total_funding | money }}</td>
+    <td class="wrap">{{ (r.categories or [])[:3] | join(', ') }}</td>
+    <td>{{ r.city or '' }}{% if r.country %}<div class="sub">{{ r.country }}</div>{% endif %}</td>
+    <td class="n">{{ r.headcount | num }}</td>
+    <td class="n">{{ delta(r.delta_year_headcount) }}</td>
+    <td class="n">{{ delta(r.delta_year_followers) }}</td>
+    <td class="n">{{ r.total_visits | num }}</td>
+    <td class="n">{{ delta(r.delta_yoy) }}</td>
+    <td class="n">{{ '%.1f' % r.overall_rating if r.overall_rating else '' }}</td>
+    <td>{% if r.affinity_link %}<a href="{{ r.affinity_link }}" target="_blank" rel="noopener">{{ r.affinity_status or 'Open' }}</a>{% else %}{{ r.affinity_status or '' }}{% endif %}{% if r.affinity_owner %}<div class="sub">{{ r.affinity_owner }}</div>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="18" class="muted">No rounds match. {% if not last_sync %}Run the first sync on the <a href="/syncs">Sync page</a>.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  </div>
+  <div class="pager">
+    {% if f.page > 1 %}<a class="btn" href="?{{ query_without(request, 'page', page=f.page - 1) }}">Previous</a>{% endif %}
+    {% if f.page < pages %}<a class="btn" href="?{{ query_without(request, 'page', page=f.page + 1) }}">Next</a>{% endif %}
+  </div>
+</section>
+</div>
+{% endblock %}

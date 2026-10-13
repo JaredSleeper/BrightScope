@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_macros.html" import result_table with context %}
+{% block body %}
+<p class="muted"><a href="/c/{{ r.org_permalink }}">Back to {{ r.org_name }}</a></p>
+<h1>Live Databricks data for {{ r.org_name }}</h1>
+{% for b in blocks %}
+<h2>{{ b.title }}</h2>
+{% if b.error %}<div class="error">{{ b.error }}</div>
+{% elif b.result.rows %}{{ result_table(b.result) }}
+{% else %}<p class="muted">No rows.</p>{% endif %}
+<details><summary class="muted">SQL</summary><pre class="schema">{{ b.sql }}</pre></details>
+{% endfor %}
+{% endblock %}
