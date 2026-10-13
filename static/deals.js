@@ -218,7 +218,19 @@
   const filters = $("#filters");
   filters.addEventListener("change", (e) => {
     const el = e.target;
-    if (el.dataset.k) set(el.dataset.k, el.type === "checkbox" ? (el.checked ? "1" : "") : el.value);
+    if (!el.dataset.k) return;
+    if (el.type === "number" || el.type === "text") {
+      // Typed fields update on input; re-rendering here on blur would swallow the next click.
+      clearTimeout(el._t);
+      const cur = state[el.dataset.k] || "";
+      if (el.value === cur) return;
+      if (el.value) state[el.dataset.k] = el.value;
+      else delete state[el.dataset.k];
+      el.closest(".field").classList.toggle("on", !!el.value);
+      load(true);
+      return;
+    }
+    set(el.dataset.k, el.type === "checkbox" ? (el.checked ? "1" : "") : el.value);
   });
   filters.addEventListener("input", (e) => {
     const el = e.target;
