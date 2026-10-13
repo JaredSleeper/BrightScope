@@ -1,17 +1,32 @@
+import re
+
 from starlette.datastructures import QueryParams
 
 from brightscope import deals
+
+ELITE = ["Accel", "Sequoia Capital"]
 
 
 def f(qs: str) -> deals.DealFilters:
     return deals.DealFilters.from_query(QueryParams(qs))
 
 
+def placeholders(sql: str) -> set[int]:
+    return {int(n) for n in re.findall(r"\$(\d+)", sql)}
+
+
 def test_defaults_are_elite_recent_first():
     x = f("")
     assert x.scope == "elite" and x.sort == "announced_on" and x.direction == "desc"
-    where, args = deals.build_where(x)
-    assert where == " where d.elite_count > 0" and args == []
+    b = deals.build(x, ELITE)
+    assert b.where == " where d.all_investors && $1::text[]" and b.args == [ELITE]
+
+
+def test_keywords_default_to_relevance_sort():
+    x = f("kw=insurance&kw=claims%20processing")
+    assert x.sort == "relevance"
+    sql, args = deals.rows_sql(x, ELITE)
+    assert "ts_rank" in sql and 'insurance or "claims processing"' in args
 
 
 def test_unknown_sort_and_scope_fall_back():
@@ -23,24 +38,27 @@ def test_unknown_sort_and_scope_fall_back():
 def test_filters_are_parameterised():
     x = f(
         "q=robot%27s&fund=Accel&fund=Sequoia%20Capital&min_round_m=10&min_hc_growth=50"
-        "&since=2025-01-01&progress=raised_since&affinity=none&scope=elite_lead"
+        "&since=2025-01-01&progress=raised_since&affinity=none&scope=elite_lead&founded_since=2020"
     )
-    where, args = deals.build_where(x)
-    assert "robot's" not in where
-    assert "%robot's%" in args
-    assert ["Accel", "Sequoia Capital"] in args
-    assert 10_000_000 in args and 0.5 in args
-    assert "d.elite_lead_count > 0" in where
-    assert "d.affinity_status is null" in where
-    import re
-
-    assert max(int(n) for n in re.findall(r"\$(\d+)", where)) == len(args)
+    b = deals.build(x, ELITE)
+    assert "robot's" not in b.where
+    assert "%robot's%" in b.args
+    assert ["Accel", "Sequoia Capital"] in b.args
+    assert 10_000_000 in b.args and 0.5 in b.args
+    assert "d.lead_investors && $1::text[]" in b.where
+    assert "d.affinity_status is null" in b.where
+    assert max(placeholders(b.where)) == len(b.args)
 
 
-def test_summary_appends_stage_param_after_filters():
-    sql, args = deals.summary_sql(f("fund=Accel"))
-    assert f"${len(args)}::text[]" in sql
-    assert args[-1] == list(deals.LATER_STAGES)
+def test_every_query_binds_all_params():
+    x = f("kw=ai&country=United%20States&min_post_m=100")
+    for fn in (deals.rows_sql, deals.summary_sql, deals.fund_counts_sql, deals.monthly_sql):
+        sql, args = fn(x, ELITE)
+        assert placeholders(sql) == set(range(1, len(args) + 1)), fn.__name__
+
+
+def test_keyword_query_strips_operators():
+    assert deals.keyword_query(["a|b", "  ", "x-ray"]) == '"a b" or x-ray'
 
 
 def test_bad_numbers_and_dates_ignored():
