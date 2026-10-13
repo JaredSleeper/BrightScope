@@ -3,7 +3,7 @@
 {% block title %}{{ r.org_name }} · BrightScope{% endblock %}
 {% block body %}
 {% macro link(u, label) %}{% if u %} · <a href="{{ u if u.startswith('http') else 'https://' ~ u }}" target="_blank" rel="noopener">{{ label }}</a>{% endif %}{% endmacro %}
-<p class="muted"><a href="javascript:history.back()">Back to deals</a></p>
+<p class="muted"><a href="/">Back to deals</a></p>
 <h1>{{ r.org_name }}</h1>
 <p class="muted">
   {% if r.website %}<a href="https://{{ r.website }}" target="_blank" rel="noopener">{{ r.website }}</a> · {% endif %}<a href="https://www.crunchbase.com/organization/{{ r.org_permalink }}" target="_blank" rel="noopener">Crunchbase</a>{% if c %}{{ link(c.linkedin_url, 'LinkedIn') }}{{ link(c.founder_linkedin, 'Founder LinkedIn') }}{{ link(c.glassdoor_link, 'Glassdoor') }}{{ link(c.affinity_link, 'Affinity') }}{% endif %}
