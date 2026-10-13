@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import delta with context %}
+{% block title %}{{ r.org_name }} · BrightScope{% endblock %}
+{% block body %}
+{% macro link(u, label) %}{% if u %} · <a href="{{ u if u.startswith('http') else 'https://' ~ u }}" target="_blank" rel="noopener">{{ label }}</a>{% endif %}{% endmacro %}
+<p class="muted"><a href="javascript:history.back()">Back to deals</a></p>
+<h1>{{ r.org_name }}</h1>
+<p class="muted">
+  {% if r.website %}<a href="https://{{ r.website }}" target="_blank" rel="noopener">{{ r.website }}</a> · {% endif %}<a href="https://www.crunchbase.com/organization/{{ r.org_permalink }}" target="_blank" rel="noopener">Crunchbase</a>{% if c %}{{ link(c.linkedin_url, 'LinkedIn') }}{{ link(c.founder_linkedin, 'Founder LinkedIn') }}{{ link(c.glassdoor_link, 'Glassdoor') }}{{ link(c.affinity_link, 'Affinity') }}{% endif %}
+  · <a href="/c/{{ r.org_permalink }}/live">All rounds and investments (live from Databricks)</a>
+</p>
+<p style="max-width:900px">{{ r.org_description or (c.description if c else '') or '' }}</p>
+{% if r.categories %}<p class="muted">{{ r.categories | join(', ') }}</p>{% endif %}
+
+<h2>Series A</h2>
+<table class="grid"><thead><tr><th>Announced</th><th>Round</th><th class="n">Raised</th><th class="n">Pre-money</th><th class="n">Post-money</th><th class="n">Investors</th><th>Stage now</th></tr></thead><tbody>
+{% for x in rounds %}<tr><td>{{ x.announced_on or '' }}</td><td>{{ x.round_name }}</td><td class="n">{{ x.money_raised_usd | money }}</td><td class="n">{{ x.pre_money_usd | money }}</td><td class="n">{{ x.post_money_usd | money }}</td><td class="n">{{ x.num_investors or x.all_investors | length }}</td><td>{{ (x.current_stage or '') | replace('_', ' ') }}</td></tr>{% endfor %}
+</tbody></table>
+
+<h2>Investors in the A ({{ investors | length }})</h2>
+<table class="grid"><thead><tr><th>Investor</th><th>Role</th><th>Partners</th><th class="n">Invested</th><th class="n">Series As in data</th></tr></thead><tbody>
+{% for i in investors %}<tr><td>{% if i.elite %}<b>{{ i.investor }}</b> <span class="muted">elite</span>{% else %}{{ i.investor }}{% endif %}</td><td>{{ 'Lead' if i.is_lead else '' }}</td><td>{{ (i.partners or []) | join(', ') }}</td><td class="n">{{ i.money_usd | money }}</td><td class="n">{{ i.a_rounds }}</td></tr>{% endfor %}
+</tbody></table>
+
+{% if c %}
+<div class="cols" style="margin-top:16px">
+  <div class="card"><h3>Company</h3><dl class="kv">
+    <dt>Total raised</dt><dd>{{ c.total_funding | money }}</dd>
+    <dt>Valuation</dt><dd>{{ c.company_valuation | money }}</dd>
+    <dt>Last funded</dt><dd>{{ c.last_funded_at or '' }}</dd>
+    <dt>Founded</dt><dd>{{ c.founded_on or '' }}</dd>
+    <dt>HQ</dt><dd>{{ c.hq_city or '' }}{{ ', ' if c.hq_city and c.hq_country }}{{ c.hq_country or '' }}</dd>
+    <dt>Industry</dt><dd>{{ c.industry or '' }}{{ ' / ' ~ c.sub_industry if c.sub_industry }}</dd>
+    <dt>Software category</dt><dd>{{ c.software_category or '' }}</dd>
+    <dt>Founder age</dt><dd>{{ c.founder_age or '' }}</dd>
+  </dl></div>
+  <div class="card"><h3>Traction</h3><dl class="kv">
+    <dt>Headcount</dt><dd>{{ c.headcount | num }} <span class="muted">{{ c.headcount_month or '' }}</span></dd>
+    <dt>Headcount change</dt><dd>{{ delta(c.delta_month_headcount) }} month, {{ delta(c.delta_year_headcount) }} year</dd>
+    <dt>LinkedIn followers</dt><dd>{{ c.followers | num }}</dd>
+    <dt>Follower change</dt><dd>{{ delta(c.delta_month_followers) }} month, {{ delta(c.delta_year_followers) }} year</dd>
+    <dt>Web visits / month</dt><dd>{{ c.total_visits | num }}</dd>
+    <dt>Visit change</dt><dd>{{ delta(c.delta_mom) }} month, {{ delta(c.delta_yoy) }} year</dd>
+    <dt>Glassdoor</dt><dd>{{ '%.2f' % c.overall_rating if c.overall_rating else '' }} {% if c.review_count %}<span class="muted">{{ c.review_count }} reviews</span>{% endif %}</dd>
+    <dt>Culture / balance</dt><dd>{{ '%.2f' % c.culture_and_values_rating if c.culture_and_values_rating else '' }} / {{ '%.2f' % c.work_life_balance_rating if c.work_life_balance_rating else '' }}</dd>
+  </dl></div>
+  <div class="card"><h3>Our coverage</h3><dl class="kv">
+    <dt>Affinity status</dt><dd>{{ c.affinity_status or 'Not in Affinity' }}</dd>
+    <dt>Priority</dt><dd>{{ c.affinity_priority or '' }}</dd>
+    <dt>Owner</dt><dd>{{ c.affinity_owner or '' }}</dd>
+    <dt>Lists</dt><dd>{{ c.list_names or '' }}</dd>
+    <dt>Last email</dt><dd>{{ c.last_email_date | cell }}</dd>
+  </dl>
+  {% if c.notes %}<h3 style="margin-top:10px">Notes</h3><div class="notes">{{ c.notes }}</div>{% endif %}
+  </div>
+</div>
+{% else %}<p class="muted">No traction data matched for this company (no website match in omniscient_v1).</p>{% endif %}
+
+<h2 id="research">Recent news and brief</h2>
+{% if research %}
+  {% if research.brief %}<p style="max-width:900px">{{ research.brief }}</p>{% endif %}
+  <ol>{% for a in research.articles %}<li><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a> <span class="muted">{{ a.published or '' }}</span></li>{% endfor %}</ol>
+  <p class="muted">Fetched {{ research.fetched_at | ago }}.</p>
+{% endif %}
+{% if news_enabled %}
+<form method="post" action="/c/{{ r.org_permalink }}/research"><button type="submit">{{ 'Refresh' if research else 'Search the web and write a brief' }}</button> <span class="muted">One Exa search and one Claude call, about 2 cents.</span></form>
+{% else %}<p class="muted">Set EXA_API_KEY to enable web research.</p>{% endif %}
+
+{% if peers %}
+<h2>Similar elite-backed Series As</h2>
+<table class="grid"><thead><tr><th>Company</th><th>Announced</th><th class="n">Round</th><th class="n">Post-money</th><th>Elite investors</th><th class="n">People YoY</th></tr></thead><tbody>
+{% for p in peers %}<tr><td><a href="/c/{{ p.org_permalink }}">{{ p.org_name }}</a></td><td>{{ p.announced_on or '' }}</td><td class="n">{{ p.money_raised_usd | money }}</td><td class="n">{{ p.post_money_usd | money }}</td><td>{{ p.elite_investors | join(', ') }}</td><td class="n">{{ delta(p.delta_year_headcount) }}</td></tr>{% endfor %}
+</tbody></table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_macros.html" import result_table with context %}
+{% block body %}
+<div class="qgrid">
+<section>
+<form method="post" action="/query">
+  <h1>Query</h1>
+  {% if ai_enabled %}
+  <label><b>Ask in plain English</b></label>
+  <div class="row2" style="margin:4px 0 10px">
+    <input class="wide" type="text" name="question" value="{{ question }}" placeholder="e.g. AI infra Series As from Sequoia or a16z in the last 6 months with headcount up 50%+">
+    <button class="primary" type="submit" name="action" value="ask">Ask</button>
+  </div>
+  {% endif %}
+  <label><b>SQL</b></label>
+  <textarea class="sql" name="sql" spellcheck="false" placeholder="select name, website, total_funding from companies order by last_funded_at desc limit 50">{{ sql }}</textarea>
+  <div class="toolbar">
+    <select name="target">
+      <option value="local" {{ 'selected' if target == 'local' }}>Local copy (Postgres, fast)</option>
+      {% if databricks_enabled %}<option value="databricks" {{ 'selected' if target == 'databricks' }}>Databricks live (Spark SQL)</option>{% endif %}
+    </select>
+    <button class="primary" type="submit" name="action" value="run">Run</button>
+    <button type="submit" name="action" value="csv">Download CSV</button>
+    <input type="text" name="name" value="{{ name }}" placeholder="Name to save as" style="padding:4px 6px;border:1px solid #e5e7eb;border-radius:4px">
+    <button type="submit" name="action" value="save">Save</button>
+  </div>
+</form>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if result %}{{ result_table(result) }}{% endif %}
+</section>
+<aside>
+  <h2>Saved queries</h2>
+  {% for s in saved %}
+  <div style="display:flex;gap:6px;align-items:center;margin:3px 0">
+    <a href="/query?saved={{ s.id }}">{{ s.name }}</a> <span class="muted">{{ s.target }}</span>
+    <form method="post" action="/query/delete" style="margin-left:auto"><input type="hidden" name="id" value="{{ s.id }}"><button type="submit">Delete</button></form>
+  </div>
+  {% else %}<p class="muted">None yet.</p>{% endfor %}
+  <h2>Tables</h2>
+  <pre class="schema">{{ schema }}</pre>
+  {% if databricks_enabled %}<pre class="schema">{{ databricks_schema }}</pre>{% endif %}
+</aside>
+</div>
+{% endblock %}

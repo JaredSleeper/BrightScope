@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="qgrid">
+<section>
+<h1>Elite funds ({{ elite | length }})</h1>
+<p class="muted">The Deals page shows companies backed by any of these. Names must match Crunchbase investor names exactly; use the search on the right to add one.</p>
+<table class="grid"><thead><tr><th>Fund</th><th class="n">Series As</th><th class="n">Led</th><th class="n">Last 12 months</th><th>Latest</th><th>Added</th><th></th></tr></thead><tbody>
+{% for e in elite %}<tr>
+  <td><a href="/?fund={{ e.name | urlencode }}">{{ e.name }}</a></td><td class="n">{{ e.n }}</td><td class="n">{{ e.leads }}</td><td class="n">{{ e.last_year }}</td><td>{{ e.latest or '' }}</td><td class="muted">{{ e.added_at.strftime('%Y-%m-%d') }}</td>
+  <td><form method="post" action="/funds/remove" onsubmit="return confirm('Remove {{ e.name }}?')"><input type="hidden" name="name" value="{{ e.name }}"><button type="submit">Remove</button></form></td>
+</tr>{% endfor %}
+</tbody></table>
+</section>
+<aside>
+<h2>Add a fund</h2>
+<form method="get" action="/funds"><input class="wide" type="text" name="q" value="{{ q }}" placeholder="Search investors"></form>
+<table class="grid" style="margin-top:6px"><thead><tr><th>Investor</th><th class="n">Series As</th><th class="n">Led</th><th></th></tr></thead><tbody>
+{% for o in others %}<tr><td>{{ o.investor }}</td><td class="n">{{ o.n }}</td><td class="n">{{ o.leads }}</td>
+<td><form method="post" action="/funds/add"><input type="hidden" name="name" value="{{ o.investor }}"><button type="submit">Add</button></form></td></tr>{% endfor %}
+</tbody></table>
+</aside>
+</div>
+{% endblock %}

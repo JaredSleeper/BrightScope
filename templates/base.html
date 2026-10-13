@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}BrightScope{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">BrightScope</a>
+  <nav>
+    {% set p = request.url.path %}
+    <a href="/" class="{{ 'on' if p == '/' or p.startswith('/c/') }}">Deals</a>
+    <a href="/query" class="{{ 'on' if p.startswith('/query') }}">Query</a>
+    <a href="/funds" class="{{ 'on' if p.startswith('/funds') }}">Elite funds</a>
+    <a href="/syncs" class="{{ 'on' if p.startswith('/syncs') }}">Sync</a>
+  </nav>
+  <span class="sync">
+    {% if running %}Sync running…{% elif last_sync %}Synced {{ last_sync.finished_at | ago }}{% if last_sync.status != 'ok' %} (<a href="/syncs">failed</a>){% endif %}{% else %}Not synced yet{% endif %}
+  </span>
+</header>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>
