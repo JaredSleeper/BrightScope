@@ -1,6 +1,7 @@
 """Natural-language thesis -> structured deal filters, via a forced Claude tool call."""
 
 import json
+import re
 import time
 from collections import OrderedDict
 from datetime import date
@@ -11,6 +12,7 @@ from .config import settings
 from .db import pool
 
 MODEL = "claude-haiku-4-5"
+_LEAD = re.compile(r"\blead|\bled\b", re.IGNORECASE)
 _cache: OrderedDict[str, dict] = OrderedDict()
 _options: dict = {}
 
@@ -138,7 +140,7 @@ async def _match_investors(names: list[str]) -> list[str]:
     return out
 
 
-async def normalize(raw: dict, opts: dict) -> list[list[str]]:
+async def normalize(raw: dict, opts: dict, text: str = "") -> list[list[str]]:
     """Validate Claude's tool input into query-string pairs the dashboard understands."""
     cats = {c.lower(): c for c in opts.get("categories", [])}
     countries = {c.lower(): c for c in opts.get("countries", [])}
@@ -160,8 +162,11 @@ async def normalize(raw: dict, opts: dict) -> list[list[str]]:
                 params.append(["country", name])
     for fund in await _match_investors([f for f in raw.get("funds") or [] if isinstance(f, str)]):
         params.append(["fund", fund])
-    if raw.get("scope") in ("elite", "elite_lead", "all"):
-        params.append(["scope", raw["scope"]])
+    scope = raw.get("scope")
+    if scope == "elite_lead" and not _LEAD.search(text):
+        scope = None
+    if scope in ("elite", "elite_lead", "all"):
+        params.append(["scope", scope])
     for key in ("since", "until"):
         try:
             if raw.get(key):
@@ -220,7 +225,7 @@ async def parse(text: str) -> dict:
     )
     raw = next((b.input for b in msg.content if b.type == "tool_use"), {}) or {}
     result = {
-        "params": await normalize(raw, opts),
+        "params": await normalize(raw, opts, text),
         "summary": str(raw.get("summary") or "")[:300],
         "ms": round((time.perf_counter() - started) * 1000),
     }
